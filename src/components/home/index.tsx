@@ -1,6 +1,16 @@
+"use client";
+
 import GetStartedButton from "./getStartedButton";
 import HeroParallax from "./heroParallax";
 import WaveTransition from "./WaveTransition";
+import dynamic from "next/dynamic";
+
+// import map component without ssr
+const InteractiveMap = dynamic(() => import("./mapComponent"), {
+    ssr: false,
+    loading: () => <p className="text-center font-bold">Memuat Peta...</p>,
+});
+
 
 const Home = () => {
     return (
@@ -20,8 +30,12 @@ const Home = () => {
             <WaveTransition />
 
             <section className="min-h-screen bg-background text-black flex flex-col items-center pt-10 px-20 pb-20 z-20 relative">
-                <h2 className="text-4xl text-primary font-serif font-bold">Ini Section Ku ke-Dua!</h2>
-                <p className="mt-5 text-gray-500">Coba kamu scroll ke atas pelan-pelan dan perhatiin gambar awannya :D</p>
+                <h2 className="text-4xl text-primary font-serif font-bold mb-10">Peta Cuaca Interaktif</h2>
+
+                {/* WADAH PETA Wajib dikasih height dan width! */}
+                <div className="w-full h-[500px] border border-gray-300 rounded-xl overflow-hidden z-0">
+                    <InteractiveMap />
+                </div>
             </section>
         </main>
     )
