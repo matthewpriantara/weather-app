@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* BACKGROUND UTAMA: Abu-abu hangat / Krem putih sangat pucat */
+  --background: #faf9f6; 
+  /* FOREGROUND (TEKS BIASA): Cokelat abu kehitaman, lebih lembut dari hitam */
+  --foreground: #3f3f3e; 
+  
+  /* PRIMARY (Warna Aksen Kuat): Warna abu-abu senja kebiruan pekat (Slate Muted) */
+  --primary: #475569;    
+  /* SECONDARY (Warna Pendukung): Abu-abu kecokelatan (mirip awan senja di foto) */
+  --secondary: #d6d3d1;  
+  /* ACCENT: Emas/Kuning redup, pas untuk ikon atau tombol *highlight* kecil */
+  --accent: #d4a373;     
+  
+  /* GRADIENT: Untuk transisi antar-elemen (misal untuk border tombol) */
+  --gradient-start: #e7e5e4; 
+  --gradient-end: #a8a29e;   
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-gradient-start: var(--gradient-start);
+  --color-gradient-end: var(--gradient-end);
+
+  /* Hubungkan Font dari layout.tsx ke konfigurasi Tailwind CSS */
+  --font-serif: var(--font-playfair);
+  --font-sans: var(--font-plus-jakarta);
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    Soft Dark Mode - Malam yang redup, tidak kontras bikin pusing
+    --background: #1e293b; 
+    --foreground: #f1f5f9; 
+    
+    --primary: #7dd3fc;    
+    --secondary: #5eead4;  
+    --accent: #fcd34d;     
+    
+    --gradient-start: #334155; 
+    --gradient-end: #1e1b4b;   
   }
-}
+} */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Set font default seluruh app menjadi Plus Jakarta Sans */
+  font-family: var(--font-sans), sans-serif;
 }
