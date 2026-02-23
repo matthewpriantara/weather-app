@@ -3,9 +3,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { use, useState } from "react";
-import { number } from "framer-motion";
-import { p } from "framer-motion/client";
+import { useState, useEffect } from "react";
 
 // mengatasi bug icon dari leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -16,70 +14,132 @@ L.Icon.Default.mergeOptions({
 });
 
 interface WeatherData {
+    // Main Info
     cityName: string;
     temp: number;
     condition: string;
     iconUrl: string;
+
+    // Group air & temp info (from data.main)
+    feelsLike: number;
+    tempMin: number;
+    temptMax: number;
+    humidity: number;
+    pressure: number;
+
+    // Wind & Condition Group (from data.wind, data.clouds, data.visibility)
+    windSpeed: number;
+    windDeg: number;
+    cloudCover: number;
+    visibility: number;
+
+    // Sun & Time Group (from data.sys & data.timezone)
+    sunrise: number; // value nya berupa angka UNIX Timestamp
+    sunset: number;
+    timezone: number;
+}
+
+interface locationMarkerProps {
+    setWeatherData: (data: WeatherData | null) => void;
+
+    // read weatherdata if want to display popup
+    weatherData: WeatherData | null;
 }
 
 // component detection when user clik on the map
-function LocationMarker() {
+function LocationMarker({ setWeatherData, weatherData }: locationMarkerProps) {
     const [position, setPosition] = useState<{ lat: number, lng: number } | null>(null);
-    const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
     // get API from .env
     const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
 
-    useMapEvents({
-        click: async (e) => {
-            // get position lat and lng from click event
+    // 1. Pindahkan logika Fetch API ke fungsi terpisah agar bisa dipanggil berkali-kali
+    const fetchWeatherData = async (lat: number, lng: number) => {
+        setIsLoading(true);
+        try {
+            const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${API_KEY}&units=metric`);
+            const data = await response.json();
+            console.log(data);
+
+            if (response.ok) {
+                // jika sukses, simpan data ke state map
+                setWeatherData({
+                    cityName: data.name || "Unknown Location",
+                    temp: Math.round(data.main.temp),
+                    condition: data.weather[0].description,
+                    iconUrl: `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`,
+
+                    feelsLike: Math.round(data.main.feels_like),
+                    tempMin: Math.round(data.main.temp_min),
+                    temptMax: Math.round(data.main.temp_max),
+                    humidity: data.main.humidity,
+                    pressure: data.main.pressure,
+                    windSpeed: data.wind.speed,
+                    windDeg: data.wind.deg,
+                    cloudCover: data.clouds.all,
+                    visibility: data.visibility,
+                    sunrise: data.sys.sunrise,
+                    sunset: data.sys.sunset,
+                    timezone: data.timezone,
+                });
+            }
+        } catch (error) {
+            console.log("Ada error bos: ", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // 2. Map Event Listeners
+    const map = useMapEvents({
+        click: (e) => {
+            // Jalankan saat pengguna klik titik lain di peta secara manual
             const { lat, lng } = e.latlng;
             setPosition({ lat, lng });
-            setIsLoading(true);
-
-            // fetch to openweather api use lat & lng value
-            try {
-                const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${API_KEY}&units=metric`);
-                const data = await response.json();
-                console.log(data);
-
-                if (response.ok) {
-                    // if success, save data to state map
-                    setWeatherData({
-                        cityName: data.name || "Unknown Location",
-                        temp: Math.round(data.main.temp),
-                        condition: data.weather[0].description,
-                        iconUrl: `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`,
-                    });
-                }
-            } catch (error) {
-                console.log("Ada error bos: ", error);
-            } finally {
-                setIsLoading(false);
-            }
+            fetchWeatherData(lat, lng);
+        },
+        locationfound: (e) => {
+            // Jalankan SAAT LOKASI PENGGUNA BERHASIL DITEMUKAN dari browser
+            const { lat, lng } = e.latlng;
+            setPosition({ lat, lng });
+            map.flyTo(e.latlng, map.getZoom()); // pindahkan kamera map ke arah lokasi user
+            fetchWeatherData(lat, lng);
+        },
+        locationerror: (e) => {
+            // Jalankan saat pengguna menolak akses atau terjadi error lokasi
+            console.log("Gagal mengakses lokasi user: ", e.message);
         }
     });
 
+    // 3. Effect saat dirender pertama kali
+    useEffect(() => {
+        // Meminta akses lokasi user seketika saat peta di-load
+        map.locate();
+    }, [map]);
+
     return position === null ? null : (
         <Marker position={position}>
-            <Popup>
-                <div className="flex flex-col items-center justify-center p-2 text-center w-[150px]">
+            <Popup className="custom-popup">
+                <div className="flex flex-col items-center justify-center p-3 text-center min-w-[160px]">
                     {isLoading ? (
-                        <p>Find Weather...</p>
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-6 h-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                            <p className="text-sm font-medium text-primary">Mencari Cuaca...</p>
+                        </div>
                     ) : weatherData ? (
                         <>
-                            <h3 className="font-bold text-lg">{weatherData.cityName}</h3>
+                            <h3 className="font-serif font-bold text-xl text-primary mb-1">{weatherData.cityName}</h3>
                             <img
                                 src={weatherData.iconUrl}
                                 alt={weatherData.condition}
-                                className="w-16 h-16 drop-shadow-sm"
+                                className="w-24 h-24 drop-shadow-md -my-3"
                             />
-                            <p className="text-2xl font-bold text-sky-600">{weatherData.temp} °C</p>
-                            <p className="capitalize text-sm text-gray-500">{weatherData.condition} </p>
+                            <p className="text-4xl font-bold text-accent tracking-tighter">{weatherData.temp}°</p>
+                            <p className="capitalize font-medium text-sm text-foreground/80 mt-1">{weatherData.condition}</p>
                         </>
                     ) : (
-                        <p>Failed to load weather data</p>
+                        <p className="text-red-500 text-sm">Gagal memuat cuaca</p>
                     )}
                 </div>
             </Popup>
@@ -88,20 +148,125 @@ function LocationMarker() {
 }
 
 const MapComponent = () => {
+    const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+
     return (
-        <div className="w-full h-full relative z-0">
-            <MapContainer
-                center={[-6.200000, 106.816666]} // Tengahnya di-set di Jakarta
-                zoom={5}
-                scrollWheelZoom={true}
-                className="w-full h-full rounded-2xl shadow-lg border border-gray-200"
-            >
-                <TileLayer
-                    attribution='&copy; OpenStreetMap contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <LocationMarker />
-            </MapContainer>
+        <div className="flex flex-col gap-8 w-full">
+            {/* maps section */}
+            <div className="w-full h-[550px] rounded-3xl overflow-hidden shadow-2xl border-4 border-white relative z-0 ring-1 ring-secondary/40">
+                <MapContainer
+                    center={[-7.801372, 110.364749]} // Tengahnya di-set di Yogyakarta
+                    zoom={10}
+                    scrollWheelZoom={true}
+                    className="w-full h-full"
+                >
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                    />
+                    <LocationMarker
+                        setWeatherData={setWeatherData}
+                        weatherData={weatherData}
+                    />
+                </MapContainer>
+            </div>
+
+            {/* dashboard statistic */}
+            {weatherData && (
+                <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white p-6 sm:p-8 mt-4">
+                    <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-stretch">
+
+                        {/* Summary Card */}
+                        <div className="w-full lg:w-1/4 flex flex-col items-center justify-center bg-gradient-to-b from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/10 shadow-inner text-center relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-accent/20 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700"></div>
+                            <h3 className="font-serif font-bold text-3xl text-primary z-10">{weatherData.cityName}</h3>
+                            <p className="capitalize font-medium text-lg text-foreground/70 mt-1 z-10">{weatherData.condition}</p>
+                            <img
+                                src={weatherData.iconUrl}
+                                alt={weatherData.condition}
+                                className="w-32 h-32 drop-shadow-xl my-2 z-10 group-hover:scale-110 transition-transform duration-300"
+                            />
+                            <h1 className="text-6xl font-bold text-primary tracking-tighter z-10">{weatherData.temp}°</h1>
+                        </div>
+
+                        {/* Details Grid */}
+                        <div className="w-full lg:w-3/4 grid grid-cols-1 sm:grid-cols-3 gap-6">
+
+                            {/* Card 1: Suhu & Udara */}
+                            <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group">
+                                <h4 className="font-serif font-semibold text-accent text-xl mb-4 border-b border-secondary/20 pb-3 flex items-center gap-2">
+                                    <span className="text-2xl group-hover:scale-125 transition-transform duration-300">🌡️</span> Suhu & Udara
+                                </h4>
+                                <div className="space-y-4 text-foreground/80 text-sm">
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Terasa Seperti</span>
+                                        <span className="font-semibold text-primary text-base">{weatherData.feelsLike}°C</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Suhu Min/Max</span>
+                                        <span className="font-bold text-primary text-base">{weatherData.tempMin}° / {weatherData.temptMax}°</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Kelembapan</span>
+                                        <span className="font-semibold text-primary text-base">{weatherData.humidity}%</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Tekanan</span>
+                                        <span className="font-semibold text-primary text-base">{weatherData.pressure} hPa</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card 2: Angin & Awan */}
+                            <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group">
+                                <h4 className="font-serif font-semibold text-accent text-xl mb-4 border-b border-secondary/20 pb-3 flex items-center gap-2">
+                                    <span className="text-2xl group-hover:scale-125 transition-transform duration-300">💨</span> Angin & Awan
+                                </h4>
+                                <div className="space-y-4 text-foreground/80 text-sm">
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Kecepatan</span>
+                                        <span className="font-semibold text-primary text-base">{weatherData.windSpeed} m/s</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Arah</span>
+                                        <span className="font-semibold text-primary text-base">{weatherData.windDeg}°</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Tutupan Awan</span>
+                                        <span className="font-semibold text-primary text-base">{weatherData.cloudCover}%</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Jarak Pandang</span>
+                                        <span className="font-semibold text-primary text-base">{(weatherData.visibility / 1000).toFixed(1)} km</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card 3: Matahari & Waktu */}
+                            <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group">
+                                <h4 className="font-serif font-semibold text-accent text-xl mb-4 border-b border-secondary/20 pb-3 flex items-center gap-2">
+                                    <span className="text-2xl group-hover:scale-125 transition-transform duration-300">☀️</span> Matahari & Waktu
+                                </h4>
+                                <div className="space-y-4 text-foreground/80 text-sm">
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Matahari Terbit</span>
+                                        <span className="font-semibold text-primary text-base">{new Date(weatherData.sunrise * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Matahari Terbenam</span>
+                                        <span className="font-semibold text-primary text-base">{new Date(weatherData.sunset * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
+                                        <span>Zona Waktu</span>
+                                        <span className="font-semibold text-primary text-base">UTC {weatherData.timezone / 3600 > 0 ? '+' : ''}{weatherData.timezone / 3600}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -30,10 +30,10 @@ const Home = () => {
             <WaveTransition />
 
             <section className="min-h-screen bg-background text-black flex flex-col items-center pt-10 px-20 pb-20 z-20 relative">
-                <h2 className="text-4xl text-primary font-serif font-bold mb-10">Peta Cuaca Interaktif</h2>
+                <h2 className="text-4xl text-primary font-serif font-bold mb-10">Weather Interactive Map</h2>
 
                 {/* WADAH PETA Wajib dikasih height dan width! */}
-                <div className="w-full h-[500px] border border-gray-300 rounded-xl overflow-hidden z-0">
+                <div className="w-full max-w-5xl z-0">
                     <InteractiveMap />
                 </div>
             </section>
