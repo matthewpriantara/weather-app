@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaf
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 
 // mengatasi bug icon dari leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -44,6 +45,18 @@ interface locationMarkerProps {
 
     // read weatherdata if want to display popup
     weatherData: WeatherData | null;
+}
+
+const getWeatherGradient = (condition: string): string => {
+    const cond = condition.toLowerCase();
+
+    if (cond.includes('clear')) return "bg-gradient-to-br from-yellow-100 to-orange-200";
+    if (cond.includes('cloud')) return "bg-gradient-to-br from-gray-100 to-gray-300";
+    if (cond.includes('rain') || cond.includes('drizzle')) return "bg-gradient-to-br from-blue-100 to-slate-300";
+    if (cond.includes('snow')) return "bg-gradient-to-br from-blue-50 to-white";
+    if (cond.includes('thunderstorm')) return "bg-gradient-to-br from-slate-400 to-gray-600 text-white";
+
+    return "bg-gradient-to-br from-primary/5 to-primary/10"; // for default background
 }
 
 // component detection when user clik on the map
@@ -149,11 +162,41 @@ function LocationMarker({ setWeatherData, weatherData }: locationMarkerProps) {
 
 const MapComponent = () => {
     const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+    const [isCelcius, setIsCelcius] = useState(true); // for temperature unit
+    const [activeLayer, setActiveLayer] = useState<string>('none')
+
+    // convertion celcius to fahrenheit dinamis
+    const formatTemp = (celcius: number) => {
+        if (isCelcius) return `${celcius}°C`;
+        return `${Math.round(celcius * 9 / 5 + 32)}°F`;
+    };
 
     return (
         <div className="flex flex-col gap-8 w-full">
             {/* maps section */}
             <div className="w-full h-[550px] rounded-3xl overflow-hidden shadow-2xl border-4 border-white relative z-0 ring-1 ring-secondary/40">
+                {/* Floating Map Controls */}
+                <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2 bg-white/70 backdrop-blur-md p-2 rounded-xl border border-white/60 shadow-lg">
+                    <p className="text-xs font-bold text-slate-600 mb-1 px-2 text-center">Lapisan Peta</p>
+                    <button
+                        onClick={() => setActiveLayer('none')}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeLayer === 'none' ? 'bg-primary text-white shadow-md' : 'hover:bg-white/50 text-slate-600'}`}
+                    >
+                        🗺️ Standar
+                    </button>
+                    <button
+                        onClick={() => setActiveLayer('precipitation_new')}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeLayer === 'precipitation_new' ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-white/50 text-slate-600'}`}
+                    >
+                        ☔ Curah Hujan
+                    </button>
+                    <button
+                        onClick={() => setActiveLayer('temp_new')}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeLayer === 'temp_new' ? 'bg-orange-500 text-white shadow-md' : 'hover:bg-white/50 text-slate-600'}`}
+                    >
+                        🌡️ Suhu
+                    </button>
+                </div>
                 <MapContainer
                     center={[-7.801372, 110.364749]} // Tengahnya di-set di Yogyakarta
                     zoom={10}
@@ -173,25 +216,51 @@ const MapComponent = () => {
 
             {/* dashboard statistic */}
             {weatherData && (
-                <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white p-6 sm:p-8 mt-4">
-                    <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-stretch">
+                <motion.div
+                    initial={{ opacity: 0, y: 50 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    className="w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white p-6 sm:p-8 mt-4"
+                >
+                    {/* banner alert if weather is extreme */}
+                    {(weatherData.windSpeed > 10 || weatherData.temp > 35) && (
+                        <div className="w-full bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded flex items-center gap-3 animate-pulse">
+                            <span className="text-2xl">⚠️</span>
+                            <div>
+                                <h3 className="font-bold">Peringatan Cuaca Ekstrem</h3>
+                                <p className="text-sm">Kondisi cuaca di lokasi ini sedang kurang bersahabat. Perhatikan keselamatan Anda.</p>
+                            </div>
+                        </div>
+                    )}
 
-                        {/* Summary Card */}
-                        <div className="w-full lg:w-1/4 flex flex-col items-center justify-center bg-gradient-to-b from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/10 shadow-inner text-center relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-accent/20 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700"></div>
+                    {/* toggle celcius/fahrenheit */}
+                    <div className="flex justify-end mb-4">
+                        <button
+                            onClick={() => setIsCelcius(!isCelcius)}
+                            className="bg-primary/10 hover:bg-primary/20 text-primary font-bold py-2 px-4 rounded-full transition-colors text-sm border border-primary/20 shadow-sm flex gap-2 items-center"
+                        >
+                            Ubah Satuan <span>{isCelcius ? "➡️ °F" : "➡️ °C"}</span>
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-stretch">
+                        {/* summary card - dinamic background */}
+                        <div className={`w-full lg:w-1/4 flex flex-col items-center justify-center rounded-2xl p-6 border border-white/40 shadow-inner text-center relative overflow-hidden group ${getWeatherGradient(weatherData.condition)}`}>
+                            {/* Dekorasi blur gradient */}
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-white/30 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700"></div>
+
                             <h3 className="font-serif font-bold text-3xl text-primary z-10">{weatherData.cityName}</h3>
-                            <p className="capitalize font-medium text-lg text-foreground/70 mt-1 z-10">{weatherData.condition}</p>
+                            <p className="capitalize font-medium text-lg text-foreground/80 mt-1 z-10">{weatherData.condition}</p>
                             <img
                                 src={weatherData.iconUrl}
                                 alt={weatherData.condition}
                                 className="w-32 h-32 drop-shadow-xl my-2 z-10 group-hover:scale-110 transition-transform duration-300"
                             />
-                            <h1 className="text-6xl font-bold text-primary tracking-tighter z-10">{weatherData.temp}°</h1>
+                            <h1 className="text-6xl font-bold text-primary tracking-tighter z-10">{formatTemp(weatherData.temp)}</h1>
                         </div>
 
-                        {/* Details Grid */}
+                        {/* detail grid */}
                         <div className="w-full lg:w-3/4 grid grid-cols-1 sm:grid-cols-3 gap-6">
-
                             {/* Card 1: Suhu & Udara */}
                             <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group">
                                 <h4 className="font-serif font-semibold text-accent text-xl mb-4 border-b border-secondary/20 pb-3 flex items-center gap-2">
@@ -200,11 +269,11 @@ const MapComponent = () => {
                                 <div className="space-y-4 text-foreground/80 text-sm">
                                     <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
                                         <span>Terasa Seperti</span>
-                                        <span className="font-semibold text-primary text-base">{weatherData.feelsLike}°C</span>
+                                        <span className="font-semibold text-primary text-base">{formatTemp(weatherData.feelsLike)}</span>
                                     </div>
                                     <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
                                         <span>Suhu Min/Max</span>
-                                        <span className="font-bold text-primary text-base">{weatherData.tempMin}° / {weatherData.temptMax}°</span>
+                                        <span className="font-bold text-primary text-base">{formatTemp(weatherData.tempMin)} / {formatTemp(weatherData.temptMax)}</span>
                                     </div>
                                     <div className="flex justify-between items-center bg-background/60 p-2.5 rounded-lg border border-secondary/10">
                                         <span>Kelembapan</span>
@@ -217,7 +286,7 @@ const MapComponent = () => {
                                 </div>
                             </div>
 
-                            {/* Card 2: Angin & Awan */}
+                            {/* card 2: wind & cloud (not change) */}
                             <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group">
                                 <h4 className="font-serif font-semibold text-accent text-xl mb-4 border-b border-secondary/20 pb-3 flex items-center gap-2">
                                     <span className="text-2xl group-hover:scale-125 transition-transform duration-300">💨</span> Angin & Awan
@@ -242,8 +311,8 @@ const MapComponent = () => {
                                 </div>
                             </div>
 
-                            {/* Card 3: Matahari & Waktu */}
-                            <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group">
+                            {/* Card 3: Sun $ Time */}
+                            <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-secondary/30 hover:shadow-md transition-all hover:-translate-y-1 duration-300 group ">
                                 <h4 className="font-serif font-semibold text-accent text-xl mb-4 border-b border-secondary/20 pb-3 flex items-center gap-2">
                                     <span className="text-2xl group-hover:scale-125 transition-transform duration-300">☀️</span> Matahari & Waktu
                                 </h4>
@@ -262,10 +331,9 @@ const MapComponent = () => {
                                     </div>
                                 </div>
                             </div>
-
                         </div>
                     </div>
-                </div>
+                </motion.div>
             )}
         </div>
     );
